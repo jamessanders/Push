@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving #-}
 module Push.Types where
 
 import Data.Time
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>))
+import Text.RSTemplate
 
 data SiteConfig = SiteConfig {
   getSiteName        :: ByteString,
@@ -27,12 +28,16 @@ defaultSiteConfig prefix = SiteConfig {
   }
 
 data Article = Article {
-  getCommitDate   :: UTCTime,
-  getCommitAuthor :: ByteString,
-  getCommitEmail  :: ByteString,
-  getFilePath     :: FilePath,
-  getBody         :: String,
-  getArticleTitle :: String,
-  getSiteConfig   :: SiteConfig
+  getCommitDate     :: UTCTime,
+  getCommitAuthor   :: ByteString,
+  getCommitEmail    :: ByteString,
+  getLastCommitDate :: UTCTime,
+  getFilePath       :: FilePath,
+  getBody           :: String,
+  getArticleTitle   :: String,
+  getSiteConfig     :: SiteConfig
 } deriving (Show)
 
+newtype ArticleList a = ArticleList {
+  unwrapAL :: [a] 
+  } deriving (Show, Read)

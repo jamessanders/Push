@@ -32,9 +32,17 @@ instance (Monad m) => ContextBinding m SiteConfig where
 instance ContextBinding IO Article where
   binding "title"      = return . bind . getArticleTitle
   binding "commitDate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getCommitDate x) >>= return . bind)
+  binding "lastUpdate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getLastCommitDate x) >>= return . bind)
   binding "body"       = return . bind . getBody
   binding "path"       = return . bind . (++ ".html") . dropExtension . takeFileName . getFilePath
   binding _            = \x -> return $ bind ("" :: String)
+
+instance ContextBinding IO (ArticleList Article) where
+  binding "reverse" = return . bind . ArticleList . reverse . unwrapAL
+  binding "take"    = \al -> return . ContextFunction $ (\([ContextInteger x])-> return . bind $ ArticleList (take (fromIntegral x) (unwrapAL al)))
+  binding "" = \_-> return $ bind ("failure" :: String)
+  makeIterable = return . map bind . unwrapAL
+
 
 makeDate :: String -> UTCTime -> IO String
 makeDate dateFormat d = do
@@ -67,18 +75,20 @@ buildArticlesList siteConfig =
   mapM getArticleInfo
   where
     getArticleInfo path = do                                                           
-      [date,email,author] <- git ["log", "--format=%at:%ae:%an", path] >>=             
-                               return . BC.split ':' . last . BC.lines                 
+      log <- git ["log", "--format=%at:%ae:%an", path]
+      let [date,email,author] = BC.split ':' . last . BC.lines $ log
+      let [lastCommit,_,_] = BC.split ':' . head . BC.lines $ log
       content <- markdownToHtml path                                                   
       let (title, content') = findTitle content                                        
       return $  Article {                                                              
-        getFilePath     = path,                                                        
-        getCommitDate   = posixSecondsToUTCTime (realToFrac $ read $ BC.unpack date),  
-        getCommitEmail  = email,                                                       
-        getCommitAuthor = author,                                                      
-        getBody         = content',                                                    
-        getArticleTitle = title,                                                        
-        getSiteConfig   = siteConfig
+        getFilePath       = path,                                                        
+        getCommitDate     = posixSecondsToUTCTime (realToFrac $ read $ BC.unpack date),  
+        getLastCommitDate = posixSecondsToUTCTime (realToFrac $ read $ BC.unpack lastCommit),  
+        getCommitEmail    = email,                                                       
+        getCommitAuthor   = author,                                                      
+        getBody           = content',                                                    
+        getArticleTitle   = title,                                                        
+        getSiteConfig     = siteConfig
                           
         }                                                                              
                                                                                        
@@ -109,8 +119,9 @@ main = do
   siteConfig <- buildSiteConfig (cwd </> "site.conf")
   articles   <- buildArticlesList siteConfig
   context    <- makeContext $ do
-    set "articles" (reverse $ sortWith (getCommitDate) articles)
+    set "articles" (ArticleList $ reverse $ sortWith (getCommitDate) articles)
     set "site" siteConfig
+    set "reverse" $ ContextFunction $ \[(ContextList x)]-> return (ContextList $ reverse x) :: IO (ContextItem IO)
   index <- evalTemplate (cwd </> getTemplatePath siteConfig </> "index.html") context 
   let bIndex = (cwd </> getBuildPath siteConfig </> "index.html")
   catch (createDirectory (cwd </> getBuildPath siteConfig)) (\_-> return ())
@@ -120,7 +131,7 @@ main = do
     let writeTo = replaceExtension (cwd </> getBuildPath siteConfig </> (makeRelative (cwd </> getDocPath siteConfig) (getFilePath article))) $ "html"
     context <- makeContext $ do
       set "article" article
-      set "articles" (reverse $ sortWith (getCommitDate) articles)
+      set "articles" (ArticleList $ reverse $ sortWith (getCommitDate) articles)
       set "site" siteConfig
     art <- evalTemplate (cwd </> getTemplatePath siteConfig </> "article.html") context 
     BC.writeFile writeTo art

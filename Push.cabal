@@ -15,7 +15,7 @@ Executable push
   Main-is: Main.hs
   Build-depends: base >= 4,
                  bytestring >= 0.9.1.5,
-                 rstemplate >= 1.0.4,
+                 rstemplate >= 1.1.1,
                  pandoc >= 1.8.0.1,
                  tagsoup >= 0.12,
                  unix >= 2.4.0.0,
