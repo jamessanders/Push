@@ -4,7 +4,7 @@ module Push.Types where
 import Data.Time
 import Data.ByteString.Char8 (ByteString)
 import System.FilePath ((</>))
-import Text.RSTemplate
+import Text.Twine
 
 data SiteConfig = SiteConfig {
   getSiteName        :: ByteString,
@@ -21,7 +21,7 @@ defaultSiteConfig prefix = SiteConfig {
   getSiteName        = "",
   getSiteVersion     = "",
   getSiteDescription = "",
-  getDocPath         = prefix </> "doc",
+  getDocPath         = prefix </> "docs",
   getBuildPath       = prefix </> "build",
   getTemplatePath    = prefix </> "templates",
   getDateFormat      = "%B %e, %Y at %l:%M %p"
@@ -40,4 +40,4 @@ data Article = Article {
 
 newtype ArticleList a = ArticleList {
   unwrapAL :: [a] 
-  } deriving (Show, Read)
+} deriving (Show, Read)

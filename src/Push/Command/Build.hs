@@ -22,26 +22,26 @@ import System.Posix.Files
 import System.Posix.IO
 import Text.HTML.TagSoup
 import Text.Pandoc
-import Text.RSTemplate
+import Text.Twine
 import qualified Data.ByteString.Char8 as BC
 
-instance (Monad m) => ContextBinding m SiteConfig where
-  binding "name" = return . bind . getSiteName
-  binding "description" = return . bind . getSiteDescription
-  binding _      = \x -> return $ bind ("" :: String)
+instance TemplateInterface IO SiteConfig where
+  property "name" = return . bind . getSiteName
+  property "description" = return . bind . getSiteDescription
+  property _      = \x -> return $ bind ("" :: String)
 
-instance ContextBinding IO Article where
-  binding "title"      = return . bind . getArticleTitle
-  binding "commitDate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getCommitDate x) >>= return . bind)
-  binding "lastUpdate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getLastCommitDate x) >>= return . bind)
-  binding "body"       = return . bind . getBody
-  binding "path"       = return . bind . (++ ".html") . dropExtension . takeFileName . getFilePath
-  binding _            = \x -> return $ bind ("" :: String)
+instance TemplateInterface IO Article where
+  property "title"      = return . bind . getArticleTitle
+  property "commitDate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getCommitDate x) >>= return . bind)
+  property "lastUpdate" = \x -> ((makeDate (getDateFormat . getSiteConfig $ x) $ getLastCommitDate x) >>= return . bind)
+  property "body"       = return . bind . getBody
+  property "path"       = return . bind . (++ ".html") . dropExtension . takeFileName . getFilePath
+  property _            = \x -> return $ bind ("" :: String)
 
-instance ContextBinding IO (ArticleList Article) where
-  binding "reverse" = return . bind . ArticleList . reverse . unwrapAL
-  binding "take"    = \al -> return . ContextFunction $ (\([ContextInteger x])-> return . bind $ ArticleList (take (fromIntegral x) (unwrapAL al)))
-  binding "" = \_-> return $ bind ("failure" :: String)
+instance TemplateInterface IO (ArticleList Article) where
+  property "reverse" = return . bind . ArticleList . reverse . unwrapAL
+  --property "take"    = \al -> return . ContextFunction $ (\([ContextInteger x])-> return . bind $ ArticleList (take (fromIntegral x) (unwrapAL al)))
+  property "" = \_-> return $ bind ("failure" :: String)
   makeIterable = return . map bind . unwrapAL
 
 
@@ -120,9 +120,8 @@ main = do
   siteConfig <- buildSiteConfig (cwd </> "site.conf")
   articles   <- buildArticlesList siteConfig
   context    <- makeContext $ do
-    set "articles" (ArticleList $ reverse $ sortWith (getCommitDate) articles)
-    set "site" siteConfig
-    set "reverse" $ ContextFunction $ \[(ContextList x)]-> return (ContextList $ reverse x) :: IO (ContextItem IO)
+    "articles" =: (ArticleList $ reverse $ sortWith (getCommitDate) articles)
+    "site"     =: siteConfig
   index <- evalTemplate (cwd </> getTemplatePath siteConfig </> "index.html") context 
   let bIndex = (cwd </> getBuildPath siteConfig </> "index.html")
   catch (createDirectory (cwd </> getBuildPath siteConfig)) (\_-> return ())
@@ -131,8 +130,8 @@ main = do
   forM_ articles $ \article -> do
     let writeTo = replaceExtension (cwd </> getBuildPath siteConfig </> (makeRelative (cwd </> getDocPath siteConfig) (getFilePath article))) $ "html"
     context <- makeContext $ do
-      set "article" article
-      set "articles" (ArticleList $ reverse $ sortWith (getCommitDate) articles)
-      set "site" siteConfig
+      "article"  =: article
+      "articles" =: (ArticleList $ reverse $ sortWith (getCommitDate) articles)
+      "site"     =: siteConfig
     art <- evalTemplate (cwd </> getTemplatePath siteConfig </> "article.html") context 
     BC.writeFile writeTo art
