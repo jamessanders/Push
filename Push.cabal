@@ -9,8 +9,13 @@ Maintainer:          jimmyjazz14@gmail.com
 Category:            Web
 Build-type:          Simple
 Cabal-version:       >=1.2
-Executable push
 
+data-files: 
+  extra/templates/basic/index.html
+  extra/site.conf.tmpl
+
+
+Executable push
   hs-source-dirs: src
   Main-is: Main.hs
   Build-depends: base >= 4,
@@ -27,6 +32,9 @@ Executable push
                  time >= 1.1.4,
                  data-object-yaml >= 0.3.3.4,
                  data-object >= 0.3.1.6,
-                 failure >= 0.1.0.1
-
-  
+                 failure >= 0.1.0.1,
+                 containers >= 0.3.0.0,
+                 template-haskell
+  other-modules:
+    Paths_Push
+    

@@ -2,9 +2,11 @@ import System.Environment
 import System.Exit
 
 import qualified Push.Command.Build
+import qualified Push.Command.Init
 
 -- Maps subcommand strings to there corresponsing modules/functions
 getSubProcess "build" = Just Push.Command.Build.main
+getSubProcess "init"  = Just Push.Command.Init.main
 getSubProcess _ = Nothing
 
 usage = do

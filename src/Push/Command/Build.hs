@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings, FlexibleInstances, MultiParamTypeClasses, TypeSynonymInstances, UndecidableInstances #-}
 module Push.Command.Build (main) where
 import Control.Failure
 import Control.Monad
@@ -23,7 +23,12 @@ import System.Posix.IO
 import Text.HTML.TagSoup
 import Text.Pandoc
 import Text.Twine
+import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as BC
+
+instance (Monad m) => TemplateInterface m String where
+  makeString = return
+
 
 instance TemplateInterface IO SiteConfig where
   property "name" = return . bind . getSiteName
@@ -38,12 +43,22 @@ instance TemplateInterface IO Article where
   property "path"       = return . bind . (++ ".html") . dropExtension . takeFileName . getFilePath
   property _            = \x -> return $ bind ("" :: String)
 
-instance TemplateInterface IO (ArticleList Article) where
-  property "reverse" = return . bind . ArticleList . reverse . unwrapAL
+instance TemplateInterface IO ArticleList where
+  property "reverse" = return . bind . reverse . M.elems . unwrapAL
+  property "keys"    = return . bind . M.keys . unwrapAL
   --property "take"    = \al -> return . ContextFunction $ (\([ContextInteger x])-> return . bind $ ArticleList (take (fromIntegral x) (unwrapAL al)))
+  property "get" = \a -> 
+    let get k = do
+          key <- unbind k
+          return $ bind $ M.lookup key (unwrapAL a)
+    in return . method $ \ls -> mapM get ls >>= return . bind
   property "" = \_-> return $ bind ("failure" :: String)
-  makeIterable = return . map bind . unwrapAL
+  makeIterable = return . map bind . M.elems . unwrapAL
 
+
+makeArticleList = ArticleList . foldl aux M.empty 
+  where 
+    aux a b = M.insert (getSlug b) b a
 
 makeDate :: String -> UTCTime -> IO String
 makeDate dateFormat d = do
@@ -82,6 +97,7 @@ buildArticlesList siteConfig =
       content <- markdownToHtml path                                                   
       let (title, content') = findTitle content                                        
       return $  Article {                                                              
+        getSlug           = (takeBaseName path),
         getFilePath       = path,                                                        
         getCommitDate     = posixSecondsToUTCTime (realToFrac $ read $ BC.unpack date),  
         getLastCommitDate = posixSecondsToUTCTime (realToFrac $ read $ BC.unpack lastCommit),  
@@ -90,7 +106,6 @@ buildArticlesList siteConfig =
         getBody           = content',                                                    
         getArticleTitle   = title,                                                        
         getSiteConfig     = siteConfig
-                          
         }                                                                              
                                                                                        
     getAllArticleFiles path = do                                                       
@@ -120,7 +135,7 @@ main = do
   siteConfig <- buildSiteConfig (cwd </> "site.conf")
   articles   <- buildArticlesList siteConfig
   context    <- makeContext $ do
-    "articles" =: (ArticleList $ reverse $ sortWith (getCommitDate) articles)
+    "articles" =: (makeArticleList articles)
     "site"     =: siteConfig
   index <- evalTemplate (cwd </> getTemplatePath siteConfig </> "index.html") context 
   let bIndex = (cwd </> getBuildPath siteConfig </> "index.html")
@@ -131,7 +146,7 @@ main = do
     let writeTo = replaceExtension (cwd </> getBuildPath siteConfig </> (makeRelative (cwd </> getDocPath siteConfig) (getFilePath article))) $ "html"
     context <- makeContext $ do
       "article"  =: article
-      "articles" =: (ArticleList $ reverse $ sortWith (getCommitDate) articles)
+      "articles" =: (makeArticleList articles)
       "site"     =: siteConfig
     art <- evalTemplate (cwd </> getTemplatePath siteConfig </> "article.html") context 
     BC.writeFile writeTo art
