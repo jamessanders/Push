@@ -8,7 +8,7 @@ import Text.Twine
 import Data.Char
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
-import Push.Trans
+
 
 mkdir path = do 
   exists <- doesDirectoryExist path

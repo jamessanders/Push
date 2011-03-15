@@ -12,6 +12,7 @@ import Data.Time.Format
 import GHC.Exts (sortWith)
 import Push.Types
 import Push.Utils
+import Push.Configs
 import System.Directory
 import System.Environment
 import System.FilePath
@@ -111,28 +112,10 @@ buildArticlesList siteConfig =
     getAllArticleFiles path = do                                                       
       find (return True) (fileType ==? RegularFile) path                               
 
-buildSiteConfig path = do
-  config <- decodeFile path
-  case config of
-    Just conf -> do
-      processConfig (defaultSiteConfig (takeDirectory path)) conf
-    Nothing -> return (defaultSiteConfig (takeDirectory path))
-  where 
-    processConfig site config =                     
-      return $ site {                                 
-        getSiteName        = lookupConf "" "Name",              
-        getSiteVersion     = lookupConf "0.0.1" "Version",    
-        getSiteDescription = lookupConf "" "Description"  
-        }                                             
-      where
-        lookupConf def = fromMaybe def . lookupConf'
-        lookupConf' str = (fromMapping config) >>= lookupScalar (str :: String)
-
-
-
 main = do
   cwd        <- getCurrentDirectory
   siteConfig <- buildSiteConfig (cwd </> "site.conf")
+
   articles   <- buildArticlesList siteConfig
   context    <- makeContext $ do
     "articles" =: (makeArticleList articles)
@@ -141,12 +124,14 @@ main = do
   let bIndex = (cwd </> getBuildPath siteConfig </> "index.html")
   catch (createDirectory (cwd </> getBuildPath siteConfig)) (\_-> return ())
   BC.writeFile bIndex index
-  
   forM_ articles $ \article -> do
-    let writeTo = replaceExtension (cwd </> getBuildPath siteConfig </> (makeRelative (cwd </> getDocPath siteConfig) (getFilePath article))) $ "html"
+    let writeTo = replaceExtension (cwd </> getBuildPath siteConfig </> 
+                                    (makeRelative (cwd </> getDocPath siteConfig) (getFilePath article))) $ "html"
     context <- makeContext $ do
       "article"  =: article
       "articles" =: (makeArticleList articles)
       "site"     =: siteConfig
     art <- evalTemplate (cwd </> getTemplatePath siteConfig </> "article.html") context 
     BC.writeFile writeTo art
+    
+    
